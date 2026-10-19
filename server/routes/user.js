@@ -320,7 +320,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // POST /api/admin/users/:userId/generate-pin
-router.post('/:id/generate-pin', requireAuth, isAdmin, async (req, res) => {
+router.post('/:id/generate-pin', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
