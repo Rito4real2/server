@@ -1,4 +1,3 @@
-// server.js (Put this at the very top of the file)
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION:', err);
   process.exit(1);
@@ -26,7 +25,7 @@ console.log('path imported');
 const http = require('http');
 console.log('HTTP imported');
 
-const { Server } = require('socket.io'); // Fixed: use { Server } (capital S)
+const { Server } = require('socket.io');
 console.log('socket io imported');
 
 const ChatThread = require('./models/ChatThread');
@@ -45,12 +44,12 @@ const investmentAdminRouter = require('./routes/investmentAdmin');
 const chatRouter = require('./routes/chat');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 // Create HTTP server and bind Express
 const server = http.createServer(app);
 
-// ENABLE EXPRESS CORS MIDDLEWARE (Add this right here!)
+// ENABLE EXPRESS CORS MIDDLEWARE
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
@@ -62,7 +61,7 @@ app.use(cors({
     }
     return callback(new Error("Not allowed by CORS"));
   },
-  credentials: true, // Crucial for cookies / auth sessions
+  credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
@@ -90,23 +89,19 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log('⚡ Socket connected:', socket.id);
 
-  // Join user's private support room
   socket.on('join_room', (userId) => {
     const roomName = `room_${userId}`;
     socket.join(roomName);
     console.log(`Socket ${socket.id} joined ${roomName}`);
   });
 
-  // Handle incoming support messages
   socket.on('send_message', async ({ userId, senderId, senderRole, message }) => {
     try {
-      // Find or create user chat thread
       let thread = await ChatThread.findOne({ user: userId });
       if (!thread) {
         thread = await ChatThread.create({ user: userId });
       }
 
-      // Save message to MongoDB
       const newMsg = await ChatMessage.create({
         thread: thread._id,
         sender: senderId,
@@ -114,7 +109,6 @@ io.on('connection', (socket) => {
         message
       });
 
-      // Update thread metadata
       thread.lastMessage = message;
       thread.lastMessageAt = new Date();
       if (senderRole === 'user') {
@@ -124,7 +118,6 @@ io.on('connection', (socket) => {
       }
       await thread.save();
 
-      // Broadcast message to room and notify admin inbox list
       io.to(`room_${userId}`).emit('receive_message', newMsg);
       io.emit('thread_updated', thread);
 
@@ -162,24 +155,20 @@ app.use('/api/investment', investmentRoute);
 app.use('/api/investments/admin', investmentAdminRouter);
 app.use('/api/chat', chatRouter);
 
-console.log('Attempting to start server.listen(0)...');
-// Start server using `server.listen` instead of `app.listen` so Socket.io works!
-if (process.env.NODE_ENV !== 'production') {
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Express & Socket.io server running at http://localhost:${PORT}`);
-  });
-}
-
-console.log('Attempting to connect to mongoDB');
-// SAFE DATABASE CONNECTION MIDDLEWARE
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error('Database connection failed during request:', error);
-    res.status(500).json({ error: 'Database connection error', details: error.message });
-  }
+// Start server unconditionally so Render detects the port immediately
+console.log(`Attempting to start server.listen on port ${PORT}...`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Express & Socket.io server successfully running on port ${PORT}`);
 });
+
+// Connect to MongoDB in the background on startup
+console.log('Attempting to connect to mongoDB...');
+connectDB()
+  .then(() => {
+    console.log('✅ MongoDB connected successfully on startup.');
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB connection error on startup:', err.message);
+  });
 
 module.exports = app;
