@@ -342,8 +342,8 @@ router.post('/:userId/generate-pin', requireAuth, requireAdmin, async (req, res)
       withdrawalPin: randomPin,
       user: {
         id: user._id,
-        name: user.name,
-        email: user.email,
+        name: user.userName,
+        email: user.emailAddress,
         withdrawalPin: user.withdrawalPin
       }
     });
