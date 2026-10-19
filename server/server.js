@@ -1,3 +1,16 @@
+// server.js (Put this at the very top of the file)
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  process.exit(1);
+});
+
+console.log('Server script starting execution...');
+
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
