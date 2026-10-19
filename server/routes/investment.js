@@ -83,7 +83,7 @@ router.post('/buy', requireAuth, async (req, res) => {
 });
 
 // 1. GET /api/investment/plans — Get all investment plans (Admin view)
-router.get('/plans', requireAuth, requireAdmin, async (req, res) => {
+router.get('/plans', requireAuth, async (req, res) => {
   try {
     const plans = await InvestmentPlan.find().sort({ createdAt: -1 });
     res.json(plans);
