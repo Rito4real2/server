@@ -1,46 +1,29 @@
 const mongoose = require('mongoose');
 
-// Cache the connection across hot reloads and serverless invocations
-let cached = global.mongoose;
-
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
-
 const connectDB = async () => {
-  // If a connection already exists, return it
-  if (cached.conn) {
-    return cached.conn;
-  }
-
-  // If a connection promise isn't already running, create one
-  if (!cached.promise) {
+  try {
     const dbUri = process.env.MONGO_URI || process.env.MONGODB_URI || process.env.DATABASE_URL;
 
     if (!dbUri) {
-      throw new Error('MONGO_URI environment variable is missing on Vercel!');
+      console.error('❌ CRITICAL: MONGO_URI environment variable is missing!');
+      return;
+    }
+
+    // If already connected, don't reconnect
+    if (mongoose.connection.readyState >= 1) {
+      return;
     }
 
     const opts = {
-      bufferCommands: false, // Disable Mongoose buffering in serverless
+      bufferCommands: true, // Keep buffering enabled for persistent servers
     };
 
-    cached.promise = mongoose.connect(dbUri, opts).then((mongooseInstance) => {
-      console.log(`MongoDB Connected: ${mongooseInstance.connection.host}`);
-      return mongooseInstance;
-    });
-  }
-
-  try {
-    cached.conn = await cached.promise;
+    const conn = await mongoose.connect(dbUri, opts);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    // Reset promise on error so subsequent requests can retry
-    cached.promise = null;
-    console.error(`MongoDB Connection Error: ${error.message}`);
-    throw error;
+    console.error(`❌ MongoDB Connection Error: ${error.message}`);
+    // Do NOT throw or call process.exit(1) so Render doesn't crash on startup timeout
   }
-
-  return cached.conn;
 };
 
 module.exports = connectDB;
