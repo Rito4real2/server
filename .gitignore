@@ -1,0 +1,4 @@
+# .gitignore in project root
+.env
+.env.local
+node_modules/
