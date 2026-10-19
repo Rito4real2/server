@@ -150,7 +150,7 @@ app.use('/api/chat', chatRouter)
 
 // Start server using `server.listen` instead of `app.listen` so Socket.io works!
 if (process.env.NODE_ENV !== 'production') {
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Express & Socket.io server running at http://localhost:${PORT}`);
   });
 }
