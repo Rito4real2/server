@@ -224,6 +224,12 @@ router.put('/profile', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/auth/logout
+router.post('/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ message: 'Logged out successfully' });
+});
+
 // --- ADMIN-ONLY ROUTES ---
 
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
