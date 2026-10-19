@@ -12,11 +12,23 @@ process.on('unhandledRejection', (reason, promise) => {
 console.log('Server script starting execution...');
 
 const express = require('express');
+console.log('Express imported');
+
 const cors = require('cors');
+console.log('cors imported');
+
 const cookieParser = require('cookie-parser');
+console.log('cookie parser imported');
+
 const path = require('path');
+console.log('path imported');
+
 const http = require('http');
+console.log('HTTP imported');
+
 const { Server } = require('socket.io'); // Fixed: use { Server } (capital S)
+console.log('socket io imported');
+
 const ChatThread = require('./models/ChatThread');
 const ChatMessage = require('./models/ChatMessage');
 
@@ -148,8 +160,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/transaction', transactionRoute);
 app.use('/api/investment', investmentRoute);
 app.use('/api/investments/admin', investmentAdminRouter);
-app.use('/api/chat', chatRouter)
+app.use('/api/chat', chatRouter);
 
+console.log('Attempting to start server.listen(0)...');
 // Start server using `server.listen` instead of `app.listen` so Socket.io works!
 if (process.env.NODE_ENV !== 'production') {
   server.listen(PORT, '0.0.0.0', () => {
@@ -157,6 +170,7 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+console.log('Attempting to connect to mongoDB');
 // SAFE DATABASE CONNECTION MIDDLEWARE
 app.use(async (req, res, next) => {
   try {
