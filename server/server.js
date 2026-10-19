@@ -22,17 +22,6 @@ const chatRouter = require('./routes/chat');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// SAFE DATABASE CONNECTION MIDDLEWARE
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error('Database connection failed during request:', error);
-    res.status(500).json({ error: 'Database connection error', details: error.message });
-  }
-});
-
 // Create HTTP server and bind Express
 const server = http.createServer(app);
 
@@ -154,5 +143,16 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`Express & Socket.io server running at http://localhost:${PORT}`);
   });
 }
+
+// SAFE DATABASE CONNECTION MIDDLEWARE
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('Database connection failed during request:', error);
+    res.status(500).json({ error: 'Database connection error', details: error.message });
+  }
+});
 
 module.exports = app;
