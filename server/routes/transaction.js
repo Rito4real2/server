@@ -107,14 +107,30 @@ router.post('/deposit', requireAuth, async (req, res) => {
 // POST /api/transactions/withdraw
 router.post('/withdraw', requireAuth, async (req, res) => {
   try {
-    const { amount, paymentMethod, bankDetails, walletAddress } = req.body;
+    const { amount, paymentMethod, bankDetails, walletAddress, pin } = req.body;
     const withdrawAmount = Number(amount);
 
     if (!withdrawAmount || withdrawAmount <= 0) {
       return res.status(400).json({ error: 'Enter a valid withdrawal amount' });
     }
 
-    if (req.user.balance < withdrawAmount) {
+    // Fetch the user from the database to check balance and PIN securely
+    const user = await User.findById(req.user._id || req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // 1. Verify Withdrawal PIN
+    if (!user.withdrawalPin) {
+      return res.status(400).json({ error: 'No withdrawal PIN configured for this account. Please contact support.' });
+    }
+
+    if (user.withdrawalPin !== pin) {
+      return res.status(400).json({ error: 'Invalid withdrawal PIN. Please check and try again.' });
+    }
+
+    // 2. Check Account Balance
+    if (user.balance < withdrawAmount) {
       return res.status(400).json({ error: 'Insufficient account balance' });
     }
 
@@ -130,8 +146,9 @@ router.post('/withdraw', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Please provide a crypto wallet address' });
     }
 
+    // Create the transaction with PENDING status awaiting admin approval
     const transaction = await Transaction.create({
-      user: req.user._id,
+      user: user._id,
       type: 'WITHDRAWAL',
       amount: withdrawAmount,
       status: 'PENDING',
