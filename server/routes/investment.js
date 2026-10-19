@@ -82,6 +82,16 @@ router.post('/buy', requireAuth, async (req, res) => {
   }
 });
 
+// 1. GET /api/investment/plans — Get all investment plans (Admin view)
+router.get('/plans', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const plans = await InvestmentPlan.find().sort({ createdAt: -1 });
+    res.json(plans);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/investments/my-investments — Fetch logged-in user's active and completed investments
 router.get('/my-investments', requireAuth, async (req, res) => {
   try {
