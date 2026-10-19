@@ -241,39 +241,6 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/users/:userId/generate-pin
-router.post('/:userId/generate-pin', requireAuth, isAdmin, async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    // Generate a random 6-digit PIN (e.g., "482910")
-    const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { withdrawalPin: randomPin },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
-      message: 'Random withdrawal PIN generated successfully!',
-      withdrawalPin: randomPin,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        withdrawalPin: user.withdrawalPin
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
@@ -349,6 +316,39 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
     res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users/:userId/generate-pin
+router.post('/:id/generate-pin', requireAuth, isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Generate a random 6-digit PIN (e.g., "482910")
+    const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { withdrawalPin: randomPin },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      message: 'Random withdrawal PIN generated successfully!',
+      withdrawalPin: randomPin,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        withdrawalPin: user.withdrawalPin
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
