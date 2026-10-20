@@ -38,6 +38,11 @@ const transactionSchema = new mongoose.Schema({
     trim: true
   },
 
+  isPinVerified: {
+    type: Boolean,
+    default: false
+  },
+
   proofOfPayment: { type: String },
   
   description: { 

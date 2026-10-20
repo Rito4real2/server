@@ -282,4 +282,48 @@ router.patch('/:id/upload-proof', async (req, res) => {
   }
 });
 
+// POST /api/transaction/:transactionId/validate-pin
+router.post('/:transactionId/validate-pin', requireAuth, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { pin } = req.body;
+
+    // Fetch user and transaction
+    const user = await User.findById(req.user._id || req.user.id);
+    const transaction = await Transaction.findById(transactionId);
+
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found.' });
+    }
+
+    if (transaction.user.toString() !== user._id.toString()) {
+      return res.status(403).json({ error: 'Unauthorized access.' });
+    }
+
+    if (transaction.status !== 'PENDING') {
+      return res.status(400).json({ error: 'This transaction is no longer pending.' });
+    }
+
+    // Check PIN
+    if (!user.withdrawalPin) {
+      return res.status(400).json({ error: 'No withdrawal PIN set for this account. Please contact admin.' });
+    }
+
+    if (user.withdrawalPin !== pin) {
+      return res.status(400).json({ error: 'Invalid security PIN. Please try again.' });
+    }
+
+    // Mark as PIN verified (optional flag or simply acknowledge success)
+    transaction.isPinVerified = true;
+    await transaction.save();
+
+    res.json({
+      message: 'Withdrawal PIN validated successfully! Request is pending final admin approval.',
+      transaction
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
