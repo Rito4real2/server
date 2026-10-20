@@ -33,6 +33,11 @@ router.get('/admin/threads/:userId', requireAuth, requireAdmin, async (req, res)
   try {
     const { userId } = req.params;
 
+    // Prevent CastErrors if 'undefined' or null is passed in the URL
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      return res.status(400).json({ error: 'Valid user ID is required' });
+    }
+
     // 1. Fetch the specific user details
     const user = await User.findById(userId).select('name email balance');
 
@@ -40,13 +45,14 @@ router.get('/admin/threads/:userId', requireAuth, requireAdmin, async (req, res)
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // 2. Fetch all chat threads for the admin inbox
+    // 2. Fetch all chat threads for the admin inbox (using correct schema field names: name, email)
     const threads = await ChatThread.find()
       .populate('user', 'userName emailAddress balance')
       .sort({ lastMessageAt: -1 });
 
     res.json({ threads, user });
   } catch (err) {
+    console.error('Error fetching admin threads:', err); // Logs exact error to your terminal
     res.status(500).json({ error: err.message });
   }
 });
