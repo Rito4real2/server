@@ -21,7 +21,7 @@ router.get('/messages/:userId', requireAuth, async (req, res) => {
 router.get('/admin/threads', requireAuth, requireAdmin, async (req, res) => {
   try {
     const threads = await ChatThread.find()
-      .populate('user', 'name email balance')
+      .populate('user', 'userName emailAddress balance')
       .sort({ lastMessageAt: -1 });
     res.json(threads);
   } catch (err) {
