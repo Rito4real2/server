@@ -42,7 +42,7 @@ router.get('/admin/threads/:userId', requireAuth, requireAdmin, async (req, res)
 
     // 2. Fetch all chat threads for the admin inbox
     const threads = await ChatThread.find()
-      .populate('user', 'name email balance')
+      .populate('user', 'userName emailAddress balance')
       .sort({ lastMessageAt: -1 });
 
     res.json({ threads, user });
