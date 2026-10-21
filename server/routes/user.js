@@ -5,6 +5,7 @@ const multer = require('multer');
 const User = require('../models/User');
 const { requireAdmin, requireAuth } = require('../middleware/auth');
 const cloudinary = require('cloudinary').v2;
+const sendEmail = require('../utils/sendEmail');
 
 // Import the evaluation function from investment routes
 const { evaluateUserInvestments } = require('./investment');
@@ -83,6 +84,19 @@ router.post('/register', async (req, res) => {
     const userResponse = newUser.toObject();
     delete userResponse.password;
 
+    await sendEmail({
+      to: newUser.emailAddress,
+      subject: 'Registration sucessful!',
+      html: `
+      <div style="font-family: monospace; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #333;">Account Registration Notification</h2>
+          <p>Hello ${newUser.userName},</p>
+          <p>You have succesfully registered to (Your company name). Sit tight you will be redirected to your dashboard shortly</p>
+          <p style="color: #666; font-size: 12px;">Start your trading journey by purchasing one of our many trading plan and make the most out of the markets.</p>
+        </div>
+      `
+    })
+
     return res.status(201).json({
       message: 'Account created and logged in successfully',
       user: userResponse,
@@ -126,6 +140,19 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );
+
+    await sendEmail({
+      to: user.emailAddress,
+      subject: 'Logged in sucessfully!',
+      html: `
+      <div style="font-family: monospace; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #333;">Account Login Notification!</h2>
+          <p>Hello ${user.userName},</p>
+          <p>You have succesfully Logged into your account.</p>
+          <p style="color: #666; font-size: 12px;">Not you? <a href="#" style="text-decoration: none; color: light-blue;">Click here to verify</a> </p>
+        </div>
+      `
+    })
 
     res.cookie('token', token, {
       httpOnly: true,
@@ -337,8 +364,24 @@ router.post('/:userId/generate-pin', requireAuth, requireAdmin, async (req, res)
       return res.status(404).json({ error: 'User not found' });
     }
 
+    await sendEmail({
+      to: user.emailAddress,
+      subject: 'your Withdrawal Security PIN',
+      html: `
+      <div style="font-family: monospace; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #333;">Security PIN Notification</h2>
+          <p>Hello ${user.userName},</p>
+          <p>An admin has generated a secure withdrawal PIN for your account.</p>
+          <div style="background: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; margin: 20px 0;">
+            ${randomPin}
+          </div>
+          <p style="color: #666; font-size: 12px;">Use this 6-digit PIN to authorize pending withdrawals in your receipt modal. Do not share this code with anyone.</p>
+        </div>
+      `
+    })
+
     res.json({
-      message: 'Random withdrawal PIN generated successfully!',
+      message: 'Withdrawal PIN generated successfully!',
       withdrawalPin: randomPin,
       user: {
         id: user._id,

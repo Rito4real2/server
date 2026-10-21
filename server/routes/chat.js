@@ -19,17 +19,6 @@ router.get('/messages/:userId', requireAuth, async (req, res) => {
 });
 
 // Admin Route: Get all active support chat threads
-router.get('/admin/threads', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const threads = await ChatThread.find()
-      .populate('user', 'userName emailAddress balance')
-      .sort({ lastMessageAt: -1 });
-    res.json(threads);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 router.get('/admin/threads/:userId', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
