@@ -35,7 +35,7 @@ router.get('/admin/threads/:userId', requireAuth, requireAdmin, async (req, res)
     const { userId } = req.params;
 
     // Prevent CastErrors if 'undefined' or null is passed in the URL
-    if (!userId || userId === 'undefined' || userId === 'null') {
+    if (!userId || userId === ':userId' || userId === 'undefined' || userId === 'null') {
       return res.status(400).json({ error: 'Valid user ID is required' });
     }
 
