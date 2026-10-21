@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const User = require('../models/User')
 const ChatThread = require('../models/ChatThread');
 const ChatMessage = require('../models/ChatMessage');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
