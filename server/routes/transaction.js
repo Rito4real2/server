@@ -83,7 +83,6 @@ router.post('/deposit', requireAuth, async (req, res) => {
     const user = req.user._id
     const { amount, paymentMethod } = req.body;
     const depositAmount = Number(amount);
-    const status = transaction.status
 
     if (!depositAmount || depositAmount <= 0) {
       return res.status(400).json({ error: 'Enter a valid deposit amount' });
@@ -97,6 +96,8 @@ router.post('/deposit', requireAuth, async (req, res) => {
       status: 'PENDING',
       paymentMethod: paymentMethod || 'BANK TRANSFER',
     });
+
+    const status = transaction.status
     
     if (user.emailAddress) {
       await sendEmail({
