@@ -23,8 +23,7 @@ const getEmailTemplate = (user, status, transaction) => {
 
 // Email template for Deposit Status Update
 const getDepositEmailTemplate = (user, status, transaction) => {
-  const isPending = status === 'PENDING'; 
-  const pendingStatusColor = isPending ? '#854d0e' : '';
+  const pendingStatusColor = '#854d0e'; // Amber/yellow for PENDING
   
   return `
     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; max-width: 600px; margin: auto;">
@@ -45,8 +44,7 @@ const getDepositEmailTemplate = (user, status, transaction) => {
 
 // Email template for Withdrawal Status Update
 const getWithdrawalEmailTemplate = (user, transaction, status) => {
-  const isPending = status === 'PENDING'; 
-  const pendingStatusColor = isPending ? '#854d0e' : '';
+  const pendingStatusColor = '#854d0e'; // Amber/yellow for PENDING
   
   return `
     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; max-width: 600px; margin: auto;">

@@ -80,7 +80,7 @@ router.post('/payment-settings', requireAuth, requireAdmin, async (req, res) => 
 // 1. POST /api/transaction/deposit (FIX: Added missing deposit endpoint)
 router.post('/deposit', requireAuth, async (req, res) => {
   try {
-    const user = req.user._id
+    const userId = req.user._id || req.user;
     const { amount, paymentMethod } = req.body;
     const depositAmount = Number(amount);
 
@@ -88,17 +88,24 @@ router.post('/deposit', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Enter a valid deposit amount' });
     }
 
+    // Fetch the full user document to get email and name
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // Create deposit transaction with pending status
     const transaction = await Transaction.create({
-      user: user,
+      user: user._id,
       type: 'DEPOSIT',
       amount: depositAmount,
       status: 'PENDING',
       paymentMethod: paymentMethod || 'BANK TRANSFER',
     });
 
-    const status = transaction.status
+    const status = transaction.status;
     
+    // Send email notification upon deposit submission
     if (user.emailAddress) {
       await sendEmail({
         to: user.emailAddress,
@@ -113,6 +120,7 @@ router.post('/deposit', requireAuth, async (req, res) => {
     });
 
   } catch (err) {
+    console.error('Error creating deposit:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -171,14 +179,19 @@ router.post('/withdraw', requireAuth, async (req, res) => {
       walletAddress: paymentMethod === 'CRYPTO' ? walletAddress : undefined,
     });
 
-    const status = transaction.status
+    const status = transaction.status;
 
+    // Send email notification upon withdrawal submission
     if (user.emailAddress) {
-      await sendEmail({
+      const emailSent = await sendEmail({
         to: user.emailAddress,
         subject: `${transaction.type} ${status}`,
         html: getWithdrawalEmailTemplate(user, status, transaction)
       });
+
+      if (!emailSent) {
+        console.warn(`Failed to send withdrawal pending email to ${user.emailAddress}`);
+      }
     }
 
     res.status(201).json({
@@ -186,6 +199,7 @@ router.post('/withdraw', requireAuth, async (req, res) => {
       transaction,
     });
   } catch (err) {
+    console.error('Error processing withdrawal:', err);
     res.status(500).json({ error: err.message });
   }
 });
