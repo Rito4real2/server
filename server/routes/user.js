@@ -251,7 +251,7 @@ router.put('/profile', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/auth/logout
+// POST /api/users/logout
 router.post('/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ message: 'Logged out successfully' });
