@@ -6,7 +6,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const PaymentSetting = require('../models/PaymentSetting');
 const { requireAdmin, requireAuth } = require('../middleware/auth');
-const { getEmailTemplate } = require('../utils/emailTemplate')
+const { getEmailTemplate, getDepositEmailTemplate, getWithdrawalEmailTemplate } = require('../utils/emailTemplate')
 const sendEmail = require('../utils/sendEmail')
 
 // --- PAYMENT SETTINGS ROUTES (ADMIN & USER) ---
@@ -80,8 +80,10 @@ router.post('/payment-settings', requireAuth, requireAdmin, async (req, res) => 
 // 1. POST /api/transaction/deposit (FIX: Added missing deposit endpoint)
 router.post('/deposit', requireAuth, async (req, res) => {
   try {
+    const user = req.user._id
     const { amount, paymentMethod } = req.body;
     const depositAmount = Number(amount);
+    const status = transaction.status
 
     if (!depositAmount || depositAmount <= 0) {
       return res.status(400).json({ error: 'Enter a valid deposit amount' });
@@ -89,17 +91,26 @@ router.post('/deposit', requireAuth, async (req, res) => {
 
     // Create deposit transaction with pending status
     const transaction = await Transaction.create({
-      user: req.user._id,
+      user: user,
       type: 'DEPOSIT',
       amount: depositAmount,
       status: 'PENDING',
       paymentMethod: paymentMethod || 'BANK TRANSFER',
     });
+    
+    if (user.emailAddress) {
+      await sendEmail({
+        to: user.emailAddress,
+        subject: `${transaction.type} ${status}`,
+        html: getDepositEmailTemplate(user, status, transaction)
+      });
+    }
 
     res.status(201).json({
       message: 'Deposit request submitted and pending admin approval.',
       transaction,
     });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -158,6 +169,16 @@ router.post('/withdraw', requireAuth, async (req, res) => {
       bankDetails: paymentMethod === 'BANK_TRANSFER' ? bankDetails : undefined,
       walletAddress: paymentMethod === 'CRYPTO' ? walletAddress : undefined,
     });
+
+    const status = transaction.status
+
+    if (user.emailAddress) {
+      await sendEmail({
+        to: user.emailAddress,
+        subject: `${transaction.type} ${status}`,
+        html: getWithdrawalEmailTemplate(user, status, transaction)
+      });
+    }
 
     res.status(201).json({
       message: 'Withdrawal request submitted and pending approval.',
