@@ -6,6 +6,8 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const PaymentSetting = require('../models/PaymentSetting');
 const { requireAdmin, requireAuth } = require('../middleware/auth');
+const { getEmailTemplate } = require('../utils/emailTemplate')
+const sendEmail = require('../utils/sendEmail')
 
 // --- PAYMENT SETTINGS ROUTES (ADMIN & USER) ---
 
@@ -229,11 +231,13 @@ router.patch('/:id/status', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: `Transaction already ${transaction.status}` });
     }
 
+    const user = await User.findById(transaction.user);
+    if (!user) {
+      return res.status(404).json({ error: 'User for this transaction not found' });
+    }
+
     // Handle user balance update on approval
     if (status === 'APPROVED') {
-      const user = await User.findById(transaction.user);
-      if (!user) return res.status(404).json({ error: 'User for this transaction not found' });
-
       if (transaction.type === 'DEPOSIT') {
         user.balance += transaction.amount;
       } else if (transaction.type === 'WITHDRAWAL') {
@@ -248,8 +252,19 @@ router.patch('/:id/status', requireAuth, requireAdmin, async (req, res) => {
     transaction.status = status;
     await transaction.save();
 
+    // --- Send Email Notification via Resend ---
+    if (user.emailAddress) {
+
+      await sendEmail({
+        to: user.emailAddress,
+        subject: `${transaction.type} ${status}`,
+        html: getEmailTemplate(user, status, transaction),
+      });
+    }
+
     res.json({ message: `Transaction successfully ${status}`, transaction });
   } catch (err) {
+    console.error('Error updating transaction status:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -316,6 +331,19 @@ router.post('/:transactionId/validate-pin', requireAuth, async (req, res) => {
     // Mark as PIN verified (optional flag or simply acknowledge success)
     transaction.isPinVerified = true;
     await transaction.save();
+
+    await sendEmail({
+          to: user.emailAddress,
+          subject: 'PIN Validated sucessfully!',
+          html: `
+          <div style="font-family: monospace; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+              <h2 style="color: #333;">PIN Validation Notice!</h2>
+              <p>Hello ${user.userName},</p>
+              <p>You have succesfully validated your PIN. Your transaction will be processed shortly</p>
+              <p style="color: #666; font-size: 12px;">Not you? <a href="#" style="text-decoration: none; color: light-blue;">Click here to verify</a> </p>
+            </div>
+          `
+        })
 
     res.json({
       message: 'Withdrawal PIN validated successfully! Request is pending final admin approval.',
