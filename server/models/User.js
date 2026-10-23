@@ -12,6 +12,13 @@ const userSchema = new mongoose.Schema(
     withdrawalPin: {type: String, default: null},
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     avatarUrl: { type: String, default: '' }, // Added avatar field
+    // Add these fields to your User schema
+    isEmailVerified: { type: Boolean, default: false },
+    emailVerificationToken: String,
+    emailVerificationExpires: Date,
+    kycStatus: { type: String, enum: ['NOT_SUBMITTED', 'PENDING', 'VERIFIED', 'REJECTED'], default: 'NOT_SUBMITTED' },
+    kycDocumentUrl: { type: String },
+    kycRejectionReason: { type: String },
   },
   { timestamps: true }
 );

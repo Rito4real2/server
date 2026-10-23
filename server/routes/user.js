@@ -1,11 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 const { requireAdmin, requireAuth } = require('../middleware/auth');
 const cloudinary = require('cloudinary').v2;
+const upload = require('../middleware/upload');
 const sendEmail = require('../utils/sendEmail');
+
+const { getEmailVerificationTemplate } = require('../utils/emailTemplate');
 
 // Import the evaluation function from investment routes
 const { evaluateUserInvestments } = require('./investment');
@@ -18,10 +24,10 @@ cloudinary.config({
 });
 
 // Helper function to handle buffer uploading via stream
-const uploadToCloudinary = (buffer) => {
+const uploadToCloudinary = (buffer, folderName = 'avatars') => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: 'avatars' }, // Optional folder name in your Cloudinary storage
+      { folder: folderName, resource_type: 'auto' }, // Optional folder name in your Cloudinary storage
       (error, result) => {
         if (result) resolve(result);
         else reject(error);
@@ -30,23 +36,6 @@ const uploadToCloudinary = (buffer) => {
     uploadStream.end(buffer);
   });
 };
-
-// --- MULTER MEMORY STORAGE CONFIGURATION (Vercel Compatible) ---
-const storage = multer.memoryStorage();
-
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(null, false);
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-});
 
 // POST /api/users/register
 router.post('/register', async (req, res) => {
@@ -177,6 +166,143 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Change Password (api/user/password)
+router.put('/password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'All password fields are required' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'New passwords do not match' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    const user = await User.findById(req.user._id);
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Request Email Verification Link
+router.post('/verify-email/request', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ error: 'Email is already verified' });
+    }
+
+    // Generate secure token
+    const token = crypto.randomBytes(32).toString('hex');
+    user.emailVerificationToken = token;
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    await user.save();
+
+    // 1. Point the email link to your Frontend page (e.g., /users/settings)
+    const frontEndUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const verificationUrl = `${frontEndUrl}/users/settings?token=${token}`;
+
+    await sendEmail({
+      to: user.emailAddress,
+      subject: 'Verify Your Email Address',
+      html: getEmailVerificationTemplate(user, verificationUrl),
+    });
+
+    res.json({ message: 'Verification email sent successfully!' });
+  } catch (err) {
+    console.error('Email Verification Request Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Confirm Email Verification (This matches your frontend fetch: /api/users/verify-email/:token)
+router.get('/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Email verified successfully!' });
+  } catch (err) {
+    console.error('Email Verification Confirm Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// KYC Upload Route
+router.post('/kyc', requireAuth, upload.single('document'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please upload a valid KYC document' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      // Clean up local file if user not found
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Upload to Cloudinary using the local file path with an expanded 120-second timeout
+    const cloudinaryResponse = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'kyc-documents',
+      resource_type: 'auto',
+      timeout: 120000, // 2 minutes timeout to prevent 499 errors
+    });
+
+    // Delete the temporary local file after a successful upload
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    user.kycStatus = 'PENDING';
+    user.kycDocumentUrl = cloudinaryResponse.secure_url;
+    await user.save();
+
+    res.json({ 
+      message: 'KYC document submitted successfully. Awaiting admin review.',
+      kycDocumentUrl: user.kycDocumentUrl 
+    });
+  } catch (err) {
+    // Ensure temporary file is cleaned up even if the upload fails
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    console.error('KYC Upload Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- CURRENT USER ROUTES ---
 
 router.get('/me', requireAuth, (req, res) => {
@@ -192,10 +318,13 @@ router.get('/profile', requireAuth, async (req, res) => {
     await evaluateUserInvestments(userId);
 
     // 2. Fetch updated user details (reflecting any credited principal or profit)
-    const user = await User.findById(userId).select('-password');
+    const user = await User.findById(userId).select('-password -withdrawalPin');
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
+
+    // Debug log to confirm what MongoDB is actually sending back
+    console.log('Fetched Profile KYC Status:', user.kycStatus);
 
     res.json(user);
   } catch (err) {

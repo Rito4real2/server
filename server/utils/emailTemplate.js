@@ -62,4 +62,18 @@ const getWithdrawalEmailTemplate = (user, transaction, status) => {
   `;
 };
 
-module.exports = { getEmailTemplate, getDepositEmailTemplate, getWithdrawalEmailTemplate };
+const getEmailVerificationTemplate = (user, verificationUrl)=> {
+return `
+<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; max-width: 600px; margin: auto;">
+        <h2 style="color: #1f2937;">Verify Your Email Address</h2>
+        <p>Hello <strong>${user.fullName || user.userName}</strong>,</p>
+        <p>Please click the button below to verify your email address. This link expires in 24 hours.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Verify Email</a>
+        </div>
+        <p style="color: #4b5563; font-size: 14px;">If you did not request this, please ignore this email.</p>
+      </div>
+`;
+};
+
+module.exports = { getEmailTemplate, getDepositEmailTemplate, getWithdrawalEmailTemplate, getEmailVerificationTemplate };

@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireAuth } = require('../middleware/auth');
+const sendEmail = require('../utils/sendEmail');
 
 // POST /api/auth/admin-login
 router.post('/admin-login', async (req, res) => {
@@ -105,10 +106,75 @@ router.get('/admin-dashboard-data', requireAdmin, async (req, res) => {
   }
 });
 
+// 1. Get All Pending KYC Submissions
+router.get('/kyc/pending', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const pendingUsers = await User.find({ kycStatus: 'PENDING' }).select('-password -withdrawalPin');
+    res.json({ users: pendingUsers });
+  } catch (err) {
+    console.error('Fetch Pending KYC Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Update KYC Status (Approve / Reject)
+router.put('/kyc/:userId', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status, rejectionReason } = req.body; // status: 'VERIFIED' or 'REJECTED'
+
+    if (!['VERIFIED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid KYC status update' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.kycStatus = status;
+    user.kycRejectionReason = status === 'REJECTED' ? (rejectionReason || 'Document did not meet requirements.') : undefined;
+    await user.save();
+
+    // Send email notification via Resend
+    const emailSubject = status === 'VERIFIED' ? 'KYC Verification Approved!' : 'KYC Verification Update Required';
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; max-width: 600px; margin: auto;">
+        <h2 style="color: #1f2937;">KYC Status Update</h2>
+        <p>Hello <strong>${user.fullName || user.userName}</strong>,</p>
+        <p>Your KYC document verification status has been updated to: <strong style="text-transform: uppercase; color: ${status === 'VERIFIED' ? '#10B981' : '#EF4444'};">${status}</strong></p>
+        ${status === 'REJECTED' && user.kycRejectionReason ? `<p style="color: #4b5563;"><strong>Reason:</strong> ${user.kycRejectionReason}</p>` : ''}
+        <p style="color: #4b5563; font-size: 14px;">If you have any questions, please contact support.</p>
+      </div>
+    `;
+
+    await sendEmail({
+      to: user.emailAddress,
+      subject: emailSubject,
+      html: emailHtml,
+    });
+
+    res.json({ message: `KYC successfully marked as ${status}` });
+  } catch (err) {
+    console.error('Update KYC Status Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
-  res.clearCookie('token');
-  res.json({ message: 'Logged out successfully' });
+  try {
+    // Clear cookie with explicit matching security flags
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Same as set during login
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Matches cross-site config
+      path: '/', // Ensure root path scope
+    });
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    console.error('Logout Error:', err);
+    res.status(500).json({ error: 'Failed to log out' });
+  }
 });
 
 module.exports = router;
