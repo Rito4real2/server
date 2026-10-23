@@ -212,11 +212,17 @@ router.post('/verify-email/request', requireAuth, async (req, res) => {
     // Generate secure token
     const token = crypto.randomBytes(32).toString('hex');
     user.emailVerificationToken = token;
-    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours as Date object
     await user.save();
 
-    // 1. Point the email link to your Frontend page (e.g., /users/settings)
-    const frontEndUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    console.log('--- [BACKEND DEBUG] GENERATED EMAIL TOKEN ---');
+    console.log('User:', user.emailAddress);
+    console.log('Saved Token:', token);
+
+    // Clean frontend URL to prevent double slashes
+    const rawFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontEndUrl = rawFrontendUrl.endsWith('/') ? rawFrontendUrl.slice(0, -1) : rawFrontendUrl;
+    
     const verificationUrl = `${frontEndUrl}/users/settings?token=${token}`;
 
     await sendEmail({
@@ -237,20 +243,38 @@ router.get('/verify-email/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
+    console.log('--- [BACKEND DEBUG] EMAIL VERIFICATION ---');
+    console.log('Received Token from URL:', token);
+    console.log('Current Timestamp:', Date.now());
+
+    // Find user with matching token and valid expiration time
     const user = await User.findOne({
       emailVerificationToken: token,
       emailVerificationExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({ error: 'Invalid or expired verification token' });
+      console.warn('Verification Failed: User not found with valid/unexpired token.');
+      
+      // Secondary check to see if token exists but is expired
+      const expiredUser = await User.findOne({ emailVerificationToken: token });
+      if (expiredUser) {
+        console.warn('Token found, but it expired at:', expiredUser.emailVerificationExpires);
+        return res.status(400).json({ error: 'Verification link has expired. Please request a new one.' });
+      }
+
+      return res.status(400).json({ error: 'Invalid verification token' });
     }
 
+    console.log('User found for verification:', user.emailAddress);
+
+    // Update verification status and clear tokens
     user.isEmailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpires = undefined;
     await user.save();
 
+    console.log('User email successfully verified and saved to DB.');
     res.json({ message: 'Email verified successfully!' });
   } catch (err) {
     console.error('Email Verification Confirm Error:', err);
