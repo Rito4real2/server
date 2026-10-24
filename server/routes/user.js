@@ -7,35 +7,14 @@ const fs = require('fs');
 const path = require('path');
 const User = require('../models/User');
 const { requireAdmin, requireAuth } = require('../middleware/auth');
-const cloudinary = require('cloudinary').v2;
-const upload = require('../middleware/upload');
 const sendEmail = require('../utils/sendEmail');
+const { cloudinary, uploadToCloudinary } = require('../middleware/cloudinary');
+const upload = require('../middleware/upload')
 
 const { getEmailVerificationTemplate } = require('../utils/emailTemplate');
 
 // Import the evaluation function from investment routes
 const { evaluateUserInvestments } = require('./investment');
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Helper function to handle buffer uploading via stream
-const uploadToCloudinary = (buffer, folderName = 'avatars') => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: folderName, resource_type: 'auto' }, // Optional folder name in your Cloudinary storage
-      (error, result) => {
-        if (result) resolve(result);
-        else reject(error);
-      }
-    );
-    uploadStream.end(buffer);
-  });
-};
 
 // POST /api/users/register
 router.post('/register', async (req, res) => {
@@ -364,17 +343,9 @@ router.post('/profile/avatar', requireAuth, upload.single('avatar'), async (req,
       return res.status(400).json({ error: 'Please upload an image file.' });
     }
 
-    console.log('--- [BACKEND DEBUG] UPLOADING AVATAR ---');
-    console.log('File received:', req.file.path || req.file.originalname);
-
-    // If using disk storage, pass req.file.path to Cloudinary
-    const cloudinaryResult = await uploadToCloudinary(req.file.path);
-    const avatarUrl = cloudinaryResult.secure_url;
-
-    // Clean up temporary local file if stored on disk
-    if (req.file.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
+    // Pass the local disk file path to Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(req.file.path, 'avatars');
+    const avatarUrl = cloudinaryResult.secure_url; // This will now correctly be an image URL!
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
@@ -382,23 +353,19 @@ router.post('/profile/avatar', requireAuth, upload.single('avatar'), async (req,
       { new: true }
     ).select('-password');
 
-    if (!updatedUser) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
     res.json({
       message: 'Avatar uploaded successfully',
       avatarUrl: updatedUser.avatarUrl,
       user: updatedUser,
     });
-  } catch (err) {
-    console.error('Avatar Upload Error:', err);
-    
-    // Clean up temp file on error if it exists
+
+    // Ensure temporary file is cleaned up even if the upload fails
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-
+    
+  } catch (err) {
+    console.error('Avatar Upload Route Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
