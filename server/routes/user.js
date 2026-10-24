@@ -364,9 +364,17 @@ router.post('/profile/avatar', requireAuth, upload.single('avatar'), async (req,
       return res.status(400).json({ error: 'Please upload an image file.' });
     }
 
-    // Upload memory buffer to Cloudinary
-    const cloudinaryResult = await uploadToCloudinary(req.file.buffer);
-    const avatarUrl = cloudinaryResult.secure_url; // Gets the secure HTTPS URL
+    console.log('--- [BACKEND DEBUG] UPLOADING AVATAR ---');
+    console.log('File received:', req.file.path || req.file.originalname);
+
+    // If using disk storage, pass req.file.path to Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(req.file.path);
+    const avatarUrl = cloudinaryResult.secure_url;
+
+    // Clean up temporary local file if stored on disk
+    if (req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
@@ -374,12 +382,23 @@ router.post('/profile/avatar', requireAuth, upload.single('avatar'), async (req,
       { new: true }
     ).select('-password');
 
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     res.json({
       message: 'Avatar uploaded successfully',
       avatarUrl: updatedUser.avatarUrl,
       user: updatedUser,
     });
   } catch (err) {
+    console.error('Avatar Upload Error:', err);
+    
+    // Clean up temp file on error if it exists
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
     res.status(500).json({ error: err.message });
   }
 });
